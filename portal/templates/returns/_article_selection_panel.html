@@ -1,0 +1,114 @@
+<div id="article-selection-panel">
+    <form
+        id="return-selection-form"
+        x-data="{
+            hasSelection: false,
+            sync() {
+                this.hasSelection = this.$root.querySelectorAll('input[name=&quot;selected_skus&quot;]:checked').length > 0;
+            }
+        }"
+        x-init="sync()"
+        @change="sync()"
+    >
+        {% csrf_token %}
+
+        <div class="selection-actions" style="margin-bottom: 1rem;">
+            <label style="display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 0;">
+                <input
+                    type="checkbox"
+                    name="show_returnable_only"
+                    value="1"
+                    {% if show_returnable_only %}checked{% endif %}
+                    hx-get="{% url 'articles' order_number=order.order_number %}"
+                    hx-trigger="change"
+                    hx-target="#article-selection-panel"
+                    hx-swap="outerHTML"
+                    hx-include="#return-selection-form"
+                >
+                <span>Show returnable only</span>
+            </label>
+            <span class="badge badge-success">{{ article_rows|length }} visible</span>
+        </div>
+
+        {% if error_message %}
+            <div class="alert alert-error">
+                <p>{{ error_message }}</p>
+            </div>
+        {% endif %}
+
+        {% if article_rows %}
+            {% for row in article_rows %}
+                <div class="article-card{% if not row.selectable %} article-card-muted{% endif %}">
+                    <div class="article-selector">
+                        <input
+                            type="checkbox"
+                            id="item-{{ row.result.article.sku }}"
+                            class="item-checkbox"
+                            name="selected_skus"
+                            value="{{ row.result.article.sku }}"
+                            {% if row.selected %}checked{% endif %}
+                            {% if not row.selectable %}disabled{% endif %}
+                        >
+                    </div>
+
+                    <div class="article-info">
+                        <label for="item-{{ row.result.article.sku }}" class="article-name article-name-label">
+                            {{ row.result.article.name }}
+                        </label>
+                        <div class="article-meta">
+                            SKU: {{ row.result.article.sku }}
+                            &middot; Qty: {{ row.result.article.quantity }}
+                            {% if row.result.article.quantity_returned > 0 %}
+                                ({{ row.result.article.quantity_returned }} returned)
+                            {% endif %}
+                            {% if row.result.article.category %}
+                                &middot; {{ row.result.article.category|title }}
+                            {% endif %}
+                        </div>
+                        {% if not row.selectable %}
+                            <div class="help-text mt-1">
+                                {% if not row.result.returnable and row.result.reason %}
+                                    {{ row.result.reason }}
+                                {% else %}
+                                    Not selectable for return.
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="article-actions">
+                        <label for="qty-{{ row.result.article.sku }}" class="qty-label">Return qty</label>
+                        <select
+                            id="qty-{{ row.result.article.sku }}"
+                            class="qty-select"
+                            name="qty__{{ row.result.article.sku }}"
+                            {% if not row.selectable %}disabled{% endif %}
+                        >
+                            {% for qty in row.quantity_options %}
+                                <option value="{{ qty }}" {% if qty == row.selected_quantity %}selected{% endif %}>{{ qty }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="article-price">&euro;{{ row.result.article.price }}</div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="card" style="margin-bottom: 1rem;">
+                <p>No returnable items match the current filter.</p>
+            </div>
+        {% endif %}
+
+        <div class="selection-actions mt-2">
+            <a href="{% url 'lookup' %}" class="btn btn-secondary">&larr; Back to lookup</a>
+            <button
+                id="continue-btn"
+                type="button"
+                class="btn btn-primary continue-btn"
+                :disabled="!hasSelection"
+            >
+                Continue
+            </button>
+        </div>
+    </form>
+</div>

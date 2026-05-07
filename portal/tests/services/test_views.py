@@ -80,3 +80,23 @@ class TestArticlesView:
         response = client.get("/returns/RMA-1001/articles/")
         assert response.status_code == 200
         assert b"TSHIRT-BLK-M" in response.content
+
+    def test_returnable_only_filter_uses_htmx_partial(self, client: Client) -> None:
+        client.post(
+            "/returns/",
+            {
+                "order_number": "RMA-1001",
+                "identifier": "alex@example.com",
+            },
+        )
+
+        response = client.get(
+            "/returns/RMA-1001/articles/",
+            {"show_returnable_only": "1"},
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert response.status_code == 200
+        assert b"TSHIRT-BLK-M" in response.content
+        assert b"EBOOK-RETURNS" not in response.content
+        assert b"Order RMA-1001" not in response.content
