@@ -10,6 +10,12 @@ from django.views import View
 
 from portal.forms import LookupForm
 from portal.services.eligibility import evaluate_eligibility
+from portal.services.lookup_throttle import (
+    check_lookup_allowed,
+    lookup_throttle_message,
+    record_lookup_failure,
+    record_lookup_success,
+)
 from portal.services.order_store import find_order, get_order
 from portal.types import Article, ArticleEligibility, Order
 
@@ -142,6 +148,24 @@ def _render_articles(
     return render(request, template_name, context, status=status_code)
 
 
+def _render_lookup(
+    request: HttpRequest,
+    *,
+    form: LookupForm,
+    status_code: int = 200,
+    retry_after_seconds: int = 0,
+) -> HttpResponse:
+    response = render(
+        request,
+        "returns/lookup.html",
+        {"form": form},
+        status=status_code,
+    )
+    if retry_after_seconds > 0:
+        response["Retry-After"] = str(retry_after_seconds)
+    return response
+
+
 def _build_selected_return_items(
     order: Order,
     *,
@@ -220,24 +244,51 @@ class LookupView(View):
     """Order lookup page – validates order number + email / zip."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        return render(request, "returns/lookup.html", {"form": LookupForm()})
+        return _render_lookup(request, form=LookupForm())
 
     def post(self, request: HttpRequest) -> HttpResponse:
         form = LookupForm(request.POST)
+        throttle_status = check_lookup_allowed(request.session)
+        if throttle_status.is_blocked:
+            form.add_error(
+                None,
+                lookup_throttle_message(throttle_status.retry_after_seconds),
+            )
+            return _render_lookup(
+                request,
+                form=form,
+                status_code=429,
+                retry_after_seconds=throttle_status.retry_after_seconds,
+            )
+
         if form.is_valid():
             order = find_order(
                 form.cleaned_data["order_number"],
                 form.cleaned_data["identifier"],
             )
             if order is None:
+                failure_status = record_lookup_failure(request.session)
+                if failure_status.is_blocked:
+                    form.add_error(
+                        None,
+                        lookup_throttle_message(failure_status.retry_after_seconds),
+                    )
+                    return _render_lookup(
+                        request,
+                        form=form,
+                        status_code=429,
+                        retry_after_seconds=failure_status.retry_after_seconds,
+                    )
+
                 form.add_error(None, "Order not found or credentials do not match.")
             else:
+                record_lookup_success(request.session)
                 request.session["order_number"] = order.order_number
                 request.session.pop(_PENDING_RETURN_SESSION_KEY, None)
                 request.session.pop(_COMPLETED_RETURN_SESSION_KEY, None)
                 return redirect("articles", order_number=order.order_number)
 
-        return render(request, "returns/lookup.html", {"form": form})
+        return _render_lookup(request, form=form)
 
 
 class ArticlesView(View):

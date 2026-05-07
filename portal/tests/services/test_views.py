@@ -52,6 +52,29 @@ class TestLookupView:
         assert response.status_code == 200
         assert b"not found" in response.content.lower()
 
+    def test_repeated_failed_lookups_are_throttled(self, client: Client) -> None:
+        for _ in range(4):
+            response = client.post(
+                "/returns/",
+                {
+                    "order_number": "RMA-1001",
+                    "identifier": "wrong@example.com",
+                },
+            )
+            assert response.status_code == 200
+
+        response = client.post(
+            "/returns/",
+            {
+                "order_number": "RMA-1001",
+                "identifier": "wrong@example.com",
+            },
+        )
+
+        assert response.status_code == 429
+        assert "Retry-After" in response.headers
+        assert b"too many failed lookup attempts" in response.content.lower()
+
     def test_empty_fields_returns_form(self, client: Client) -> None:
         response = client.post(
             "/returns/",
