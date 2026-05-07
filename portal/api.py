@@ -12,6 +12,12 @@ from rest_framework.reverse import reverse
 
 from portal.forms import LookupForm
 from portal.services.eligibility import evaluate_eligibility
+from portal.services.lookup_throttle import (
+    check_lookup_allowed,
+    lookup_throttle_message,
+    record_lookup_failure,
+    record_lookup_success,
+)
 from portal.services.order_store import find_order, get_order
 from portal.types import Article, ArticleEligibility, Order
 
@@ -68,6 +74,14 @@ class ReturnsViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["post"], url_path="lookup")
     def lookup(self, request: Request) -> Response:
+        throttle_status = check_lookup_allowed(request.session)
+        if throttle_status.is_blocked:
+            return Response(
+                {"detail": lookup_throttle_message(throttle_status.retry_after_seconds)},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": str(throttle_status.retry_after_seconds)},
+            )
+
         request_serializer = LookupRequestSerializer(data=request.data)
         request_serializer.is_valid(raise_exception=True)
 
@@ -80,11 +94,19 @@ class ReturnsViewSet(viewsets.ViewSet):
             form.cleaned_data["identifier"],
         )
         if order is None:
+            failure_status = record_lookup_failure(request.session)
+            if failure_status.is_blocked:
+                return Response(
+                    {"detail": lookup_throttle_message(failure_status.retry_after_seconds)},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                    headers={"Retry-After": str(failure_status.retry_after_seconds)},
+                )
             return Response(
                 {"detail": "Order not found or credentials do not match."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        record_lookup_success(request.session)
         request.session["order_number"] = order.order_number
 
         payload = {
@@ -101,7 +123,7 @@ class ReturnsViewSet(viewsets.ViewSet):
     @action(detail=True, methods=["get"], url_path="articles")
     def articles(self, request: Request, pk: str | None = None) -> Response:
         order_number = pk or ""
-        if not request.session.get("order_number"):
+        if request.session.get("order_number") != order_number:
             return Response(
                 {"detail": "Order lookup is required before viewing articles."},
                 status=status.HTTP_403_FORBIDDEN,

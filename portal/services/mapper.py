@@ -49,6 +49,65 @@ def _as_float(value: object, default: float = 0.0) -> float:
     return default
 
 
+def _as_bool(value: object, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
+    return default
+
+
+def _normalize_category(value: str) -> str:
+    return value.strip().lower()
+
+
+def _derive_category(item: dict[str, Any]) -> str:
+    raw_category = _as_str(item.get("category"))
+    if raw_category:
+        return _normalize_category(raw_category)
+
+    product_type = _as_str(item.get("product_type"))
+    if product_type:
+        primary_segment = product_type.split(">", maxsplit=1)[0]
+        return _normalize_category(primary_segment)
+
+    return ""
+
+
+def _derive_is_digital(item: dict[str, Any], category: str) -> bool:
+    if "digital" in item:
+        return _as_bool(item.get("digital"))
+
+    if "is_digital" in item:
+        return _as_bool(item.get("is_digital"))
+
+    if "requires_shipping" in item:
+        return not _as_bool(item.get("requires_shipping"), default=True)
+
+    if category == "digital":
+        return True
+
+    tags = {_normalize_category(_as_str(tag)) for tag in item.get("tags", [])}
+    return "digital-delivery" in tags
+
+
+def _derive_is_final_sale(item: dict[str, Any]) -> bool:
+    if "final_sale" in item:
+        return _as_bool(item.get("final_sale"))
+
+    if "is_final_sale" in item:
+        return _as_bool(item.get("is_final_sale"))
+
+    tags = {_normalize_category(_as_str(tag)) for tag in item.get("tags", [])}
+    return "final-sale" in tags
+
+
 def map_order(raw: dict[str, Any]) -> Order:
     """Map a raw order dict (from ``orders_raw.json``) to an :class:`Order`.
 
@@ -78,6 +137,8 @@ def map_order(raw: dict[str, Any]) -> Order:
     articles: list[Article] = []
 
     for item in _as_list_of_dicts(raw.get("articles")):
+        category = _derive_category(item)
+        is_digital = _derive_is_digital(item, category)
         articles.append(
             Article(
                 sku=_as_str(item.get("sku")),
@@ -85,9 +146,9 @@ def map_order(raw: dict[str, Any]) -> Order:
                 quantity=_as_int(item.get("quantity"), default=1),
                 quantity_returned=_as_int(item.get("quantity_returned"), default=0),
                 price=_as_float(item.get("price")),
-                is_digital=False,
-                is_final_sale=False,
-                category="",
+                is_digital=is_digital,
+                is_final_sale=_derive_is_final_sale(item),
+                category=category or ("digital" if is_digital else ""),
             )
         )
 

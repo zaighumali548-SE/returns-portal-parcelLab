@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "returns-portal-challenge"
 version = "0.1.0"
@@ -23,6 +27,12 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev"]
+
+[tool.setuptools]
+packages = ["portal", "returns_portal"]
+
+[tool.setuptools.package-data]
+portal = ["data/*.json", "data/*.yaml", "templates/**/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["**/tests"]

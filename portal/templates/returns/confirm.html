@@ -1,0 +1,38 @@
+{% extends "returns/base.html" %}
+
+{% block title %}Confirm your return &mdash; Returns Portal{% endblock %}
+
+{% block content %}
+    <div class="order-header">
+        <h1>Confirm your return</h1>
+        <div class="order-meta">
+            <span>Order {{ order.order_number }}</span>
+            <span>{{ pending_return.item_count }} item(s)</span>
+            <span>&euro;{{ pending_return.total_amount }}</span>
+        </div>
+    </div>
+
+    <div class="card">
+        {% for item in pending_return.items %}
+            <div class="article-card">
+                <div class="article-info">
+                    <div class="article-name">{{ item.name }}</div>
+                    <div class="article-meta">
+                        SKU: {{ item.sku }} &middot; Return qty: {{ item.quantity }}
+                    </div>
+                </div>
+                <div class="article-price">&euro;{{ item.line_total }}</div>
+            </div>
+        {% endfor %}
+
+        <div class="selection-actions mt-2">
+            <a href="{% url 'articles' order_number=order.order_number %}" class="btn btn-secondary">
+                &larr; Back to articles
+            </a>
+            <form method="post" action="{% url 'return-submit' order_number=order.order_number %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">Submit return</button>
+            </form>
+        </div>
+    </div>
+{% endblock %}

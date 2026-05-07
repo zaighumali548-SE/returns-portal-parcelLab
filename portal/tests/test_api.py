@@ -38,6 +38,68 @@ class TestReturnsApiViewSet:
         assert response.status_code == 400
         assert "not found" in response.data["detail"].lower()
 
+    def test_lookup_is_throttled_after_repeated_failures(self) -> None:
+        client = APIClient()
+
+        for _ in range(4):
+            response = client.post(
+                "/api/returns/lookup/",
+                {
+                    "order_number": "RMA-1001",
+                    "identifier": "wrong@example.com",
+                },
+                format="json",
+            )
+            assert response.status_code == 400
+
+        response = client.post(
+            "/api/returns/lookup/",
+            {
+                "order_number": "RMA-1001",
+                "identifier": "wrong@example.com",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 429
+        assert response.headers["Retry-After"] == "60"
+        assert "too many failed lookup attempts" in response.data["detail"].lower()
+
+    def test_successful_lookup_resets_failed_attempt_counter(self) -> None:
+        client = APIClient()
+
+        for _ in range(4):
+            response = client.post(
+                "/api/returns/lookup/",
+                {
+                    "order_number": "RMA-1001",
+                    "identifier": "wrong@example.com",
+                },
+                format="json",
+            )
+            assert response.status_code == 400
+
+        success_response = client.post(
+            "/api/returns/lookup/",
+            {
+                "order_number": "RMA-1001",
+                "identifier": "alex@example.com",
+            },
+            format="json",
+        )
+        assert success_response.status_code == 200
+
+        failure_response = client.post(
+            "/api/returns/lookup/",
+            {
+                "order_number": "RMA-1001",
+                "identifier": "wrong@example.com",
+            },
+            format="json",
+        )
+
+        assert failure_response.status_code == 400
+
     def test_articles_requires_prior_lookup(self) -> None:
         client = APIClient()
 
@@ -72,3 +134,21 @@ class TestReturnsApiViewSet:
         assert second["article"]["sku"] == "EBOOK-RETURNS"
         assert second["returnable"] is False
         assert second["selectable"] is False
+
+    def test_articles_rejects_different_order_than_authenticated_session(self) -> None:
+        client = APIClient()
+
+        lookup_response = client.post(
+            "/api/returns/lookup/",
+            {
+                "order_number": "RMA-1001",
+                "identifier": "alex@example.com",
+            },
+            format="json",
+        )
+        assert lookup_response.status_code == 200
+
+        response = client.get("/api/returns/RMA-1002/articles/")
+
+        assert response.status_code == 403
+        assert "lookup is required" in response.data["detail"].lower()
