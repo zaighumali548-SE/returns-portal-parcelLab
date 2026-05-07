@@ -78,6 +78,27 @@ class TestDigitalItems:
         )
         results = evaluate_eligibility(order)
         assert results[0].returnable is False
+        assert results[0].matched_rule == "digital_item"
+        assert "digital" in results[0].reason.lower()
+
+
+class TestFinalSaleItems:
+    """Final-sale items should not be returnable."""
+
+    def test_final_sale_item_is_not_returnable(self) -> None:
+        order = _make_order(
+            articles=[
+                _make_article(
+                    sku="CLEARANCE-01",
+                    name="Clearance Item",
+                    is_final_sale=True,
+                ),
+            ]
+        )
+        results = evaluate_eligibility(order)
+        assert results[0].returnable is False
+        assert results[0].matched_rule == "final_sale"
+        assert "final-sale" in results[0].reason.lower()
 
 
 class TestAlreadyReturned:
@@ -91,6 +112,7 @@ class TestAlreadyReturned:
         )
         results = evaluate_eligibility(order)
         assert results[0].returnable is False
+        assert results[0].matched_rule == "fully_returned"
 
     def test_partially_returned_is_still_returnable(self) -> None:
         """An item with remaining quantity should still be returnable."""
@@ -113,6 +135,7 @@ class TestReturnWindow:
         )
         results = evaluate_eligibility(order)
         assert results[0].returnable is False
+        assert results[0].matched_rule == "return_window_expired"
 
     def test_recent_delivery_is_returnable(self) -> None:
         """Delivery 5 days ago — well within a typical return window."""
@@ -121,6 +144,29 @@ class TestReturnWindow:
             articles=[_make_article()],
         )
         results = evaluate_eligibility(order)
+        assert results[0].returnable is True
+
+
+class TestCategorySpecificWindows:
+    def test_electronics_uses_shorter_window(self) -> None:
+        order = _make_order(
+            delivery_date=datetime.now() - timedelta(days=20),
+            articles=[_make_article(category="electronics")],
+        )
+
+        results = evaluate_eligibility(order)
+
+        assert results[0].returnable is False
+        assert results[0].matched_rule == "return_window_expired"
+
+    def test_unknown_category_falls_back_to_default_window(self) -> None:
+        order = _make_order(
+            delivery_date=datetime.now() - timedelta(days=20),
+            articles=[_make_article(category="accessories")],
+        )
+
+        results = evaluate_eligibility(order)
+
         assert results[0].returnable is True
 
 

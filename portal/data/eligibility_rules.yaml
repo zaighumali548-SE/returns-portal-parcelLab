@@ -1,0 +1,10 @@
+default_return_window_days: 30
+category_return_window_days:
+  apparel: 30
+  electronics: 14
+  footwear: 14
+reasons:
+  digital_item: Digital items are not eligible for return.
+  final_sale: Final-sale items are not eligible for return.
+  fully_returned: This item has already been fully returned.
+  return_window_expired: The return window for this item has expired.
