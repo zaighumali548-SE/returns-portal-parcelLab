@@ -1,0 +1,30 @@
+{% extends "returns/base.html" %}
+
+{% block title %}Return submitted &mdash; Returns Portal{% endblock %}
+
+{% block content %}
+    <div class="card" style="max-width: 720px; margin: 0 auto;">
+        <div class="badge badge-success" style="margin-bottom: 1rem;">Return submitted</div>
+        <h1 style="margin-bottom: 0.5rem;">Your return is in progress</h1>
+        <p class="help-text" style="margin-bottom: 1.5rem;">
+            Reference {{ completed_return.reference }} for order {{ order.order_number }}.
+        </p>
+
+        {% for item in completed_return.items %}
+            <div class="article-card">
+                <div class="article-info">
+                    <div class="article-name">{{ item.name }}</div>
+                    <div class="article-meta">
+                        SKU: {{ item.sku }} &middot; Return qty: {{ item.quantity }}
+                    </div>
+                </div>
+                <div class="article-price">&euro;{{ item.line_total }}</div>
+            </div>
+        {% endfor %}
+
+        <div class="selection-actions mt-2">
+            <a href="{{ articles_url }}" class="btn btn-secondary">&larr; Back to articles</a>
+            <a href="{% url 'lookup' %}" class="btn btn-primary continue-btn">Start another return</a>
+        </div>
+    </div>
+{% endblock %}

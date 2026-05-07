@@ -1,6 +1,8 @@
 <div id="article-selection-panel">
     <form
         id="return-selection-form"
+        method="post"
+        action="{% url 'return-confirmation' order_number=order.order_number %}"
         x-data="{
             hasSelection: false,
             sync() {
@@ -103,7 +105,7 @@
             <a href="{% url 'lookup' %}" class="btn btn-secondary">&larr; Back to lookup</a>
             <button
                 id="continue-btn"
-                type="button"
+                type="submit"
                 class="btn btn-primary continue-btn"
                 :disabled="!hasSelection"
             >

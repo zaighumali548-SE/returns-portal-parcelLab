@@ -100,3 +100,62 @@ class TestArticlesView:
         assert b"TSHIRT-BLK-M" in response.content
         assert b"EBOOK-RETURNS" not in response.content
         assert b"Order RMA-1001" not in response.content
+
+    def test_continue_without_selection_shows_error(self, client: Client) -> None:
+        client.post(
+            "/returns/",
+            {
+                "order_number": "RMA-1001",
+                "identifier": "alex@example.com",
+            },
+        )
+
+        response = client.post("/returns/RMA-1001/confirm/")
+
+        assert response.status_code == 400
+        assert b"Select at least one returnable item" in response.content
+
+    def test_selected_articles_redirect_to_confirmation(self, client: Client) -> None:
+        client.post(
+            "/returns/",
+            {
+                "order_number": "RMA-1001",
+                "identifier": "alex@example.com",
+            },
+        )
+
+        response = client.post(
+            "/returns/RMA-1001/confirm/",
+            {
+                "selected_skus": ["TSHIRT-BLK-M"],
+                "qty__TSHIRT-BLK-M": "1",
+            },
+            follow=True,
+        )
+
+        assert response.status_code == 200
+        assert b"Confirm your return" in response.content
+        assert b"Vibe Tee - Bold &amp; Basic with a Twist" in response.content
+        assert b"Submit return" in response.content
+
+    def test_submit_return_reaches_success_page(self, client: Client) -> None:
+        client.post(
+            "/returns/",
+            {
+                "order_number": "RMA-1001",
+                "identifier": "alex@example.com",
+            },
+        )
+        client.post(
+            "/returns/RMA-1001/confirm/",
+            {
+                "selected_skus": ["TSHIRT-BLK-M"],
+                "qty__TSHIRT-BLK-M": "1",
+            },
+        )
+
+        response = client.post("/returns/RMA-1001/submit/", follow=True)
+
+        assert response.status_code == 200
+        assert b"Return submitted" in response.content
+        assert b"RET-1001-" in response.content
