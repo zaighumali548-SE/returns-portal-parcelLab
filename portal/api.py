@@ -101,7 +101,7 @@ class ReturnsViewSet(viewsets.ViewSet):
     @action(detail=True, methods=["get"], url_path="articles")
     def articles(self, request: Request, pk: str | None = None) -> Response:
         order_number = pk or ""
-        if not request.session.get("order_number"):
+        if request.session.get("order_number") != order_number:
             return Response(
                 {"detail": "Order lookup is required before viewing articles."},
                 status=status.HTTP_403_FORBIDDEN,

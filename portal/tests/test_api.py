@@ -72,3 +72,21 @@ class TestReturnsApiViewSet:
         assert second["article"]["sku"] == "EBOOK-RETURNS"
         assert second["returnable"] is False
         assert second["selectable"] is False
+
+    def test_articles_rejects_different_order_than_authenticated_session(self) -> None:
+        client = APIClient()
+
+        lookup_response = client.post(
+            "/api/returns/lookup/",
+            {
+                "order_number": "RMA-1001",
+                "identifier": "alex@example.com",
+            },
+            format="json",
+        )
+        assert lookup_response.status_code == 200
+
+        response = client.get("/api/returns/RMA-1002/articles/")
+
+        assert response.status_code == 403
+        assert "lookup is required" in response.data["detail"].lower()
